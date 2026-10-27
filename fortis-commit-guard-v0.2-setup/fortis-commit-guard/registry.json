@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "projects": {
+    "obs-planning-docs": {
+      "repository": "AlexPastukhh/obs-planning-docs",
+      "repository_id": 1276070507,
+      "profile": "profiles/obs-planning-docs.json"
+    }
+  }
+}
