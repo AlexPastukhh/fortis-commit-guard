@@ -1,22 +1,69 @@
-name: Guard self-tests
+name: Check a project commit
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      project:
+        description: Owner-registered project
+        type: choice
+        options:
+          - obs-planning-docs
+        required: true
+      candidate_sha:
+        description: Full lowercase 40-character commit SHA
+        type: string
+        required: true
+      architecture:
+        description: Add optional architecture checks
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  self-tests:
-    name: Guard self-tests
+  inspect:
+    if: github.repository_id == '1435231247' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      PROJECT: ${{ inputs.project }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      ARCHITECTURE: ${{ inputs.architecture }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Checkout owner-approved guard
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
           submodules: false
-      - name: Test required checks, registry and optional architecture
+
+      - name: Verify guard itself
         run: python3 -m unittest discover -s tests -v
+
+      - name: Fetch registered public candidate without credentials
+        run: >-
+          python3 fetch_candidate.py
+          --destination "$RUNNER_TEMP/candidate.git"
+          --project "$PROJECT"
+
+      - name: Run mandatory security and selected additional checks
+        run: >-
+          python3 guard.py
+          --repo "$RUNNER_TEMP/candidate.git"
+          --candidate "$CANDIDATE_SHA"
+          --project "$PROJECT"
+          --architecture "$ARCHITECTURE"
+          --output report.json
+
+      - name: Publish scope and status
+        if: always()
+        run: python3 summarize.py
+
+      - name: Retain report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: commit-guard-report
+          path: report.json
+          if-no-files-found: warn
+          retention-days: 14
